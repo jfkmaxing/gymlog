@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gymlog</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gymlog">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eef1f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b101c" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: one-screen app (header, scrolling view, tab bar). Each set is a plate in a weight stack;
+     the numbered tab on the left is the pin you push in when the set is done. */
+  --bg:#eef1f7;
+  --surface:#ffffff;
+  --ink:#121a2e;
+  --muted:#59647f;
+  --line:#d3d9e7;
+  --accent:#1c3da6;
+  --accent-ink:#ffffff;
+  --accent-soft:#e1e7fa;
+  --up:#17754a;
+  --same:#7a5d00;
+  --down:#b3261e;
+  --note-bg:#fff3d1;
+  --note-ink:#4a3800;
+  --f-display:"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0b101c; --surface:#141b2c; --ink:#edf0f8; --muted:#9aa5c0; --line:#27314b;
+    --accent:#86a0ff; --accent-ink:#0b101c; --accent-soft:#1b2646;
+    --up:#62d394; --same:#e6c55f; --down:#ff8d83;
+    --note-bg:#33290a; --note-ink:#f3e2a6;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.4 var(--f-body);-webkit-text-size-adjust:100%;overscroll-behavior:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+.num{font-family:var(--f-display);font-variant-numeric:tabular-nums}
+
+#app{height:100%;display:flex;flex-direction:column;max-width:560px;margin:0 auto}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px 8px;padding-top:calc(12px + env(safe-area-inset-top));padding-left:calc(16px + env(safe-area-inset-left));padding-right:calc(16px + env(safe-area-inset-right))}
+.brand{display:flex;align-items:center;gap:8px;font:700 22px/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase}
+.brand i{width:14px;height:14px;background:var(--accent);display:block}
+.sync{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 11px;min-height:32px}
+.sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.sync[data-s="ok"]::before{background:var(--up)}
+.sync[data-s="wait"]::before,.sync[data-s="busy"]::before{background:var(--same)}
+.sync[data-s="err"]::before{background:var(--down)}
+#view{flex:1;overflow-y:auto;padding:4px 16px 24px;padding-left:calc(16px + env(safe-area-inset-left));padding-right:calc(16px + env(safe-area-inset-right));display:flex;flex-direction:column;gap:16px;-webkit-overflow-scrolling:touch}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);background:var(--surface);padding-bottom:env(safe-area-inset-bottom)}
+.tabs button{border:0;background:none;padding:12px 4px 14px;font:600 17px var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:3px solid transparent;margin-top:-1px}
+.tabs button[aria-current="page"]{color:var(--accent);border-top-color:var(--accent)}
+
+.eyebrow{font:600 13px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.group{display:flex;flex-direction:column;gap:8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px}
+.note{background:var(--note-bg);color:var(--note-ink);border-radius:8px;padding:10px 12px;font-size:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.note.ok{background:var(--accent-soft);color:var(--ink)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.spread{justify-content:space-between}
+p{margin:0}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:9px 12px;font-weight:600;font-size:15px;min-height:42px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.big{width:100%;padding:13px;font:700 20px var(--f-display);letter-spacing:.06em;text-transform:uppercase}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.danger{color:var(--down)}
+.btn:disabled{opacity:.5;cursor:default}
+
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:99px;padding:2px 9px;font:600 13px var(--f-body);border:1px solid currentColor;white-space:nowrap}
+.pill.up{color:var(--up)} .pill.same{color:var(--same)} .pill.down{color:var(--down)} .pill.info{color:var(--muted)} .pill.acc{color:var(--accent)}
+
+/* start */
+.routine{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--accent);border-radius:8px;padding:12px 14px}
+.routine h3{font-size:28px;line-height:1;font-weight:700;text-transform:uppercase}
+.routine .go{grid-row:1 / span 2;grid-column:2;font:700 16px var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.day b{width:100%;aspect-ratio:1;max-height:44px;border:1px solid var(--line);border-radius:4px;display:grid;place-items:center;font:700 18px var(--f-display);color:var(--accent-ink);background:var(--surface)}
+.day.on b{background:var(--accent);border-color:var(--accent)}
+.day.today{color:var(--ink);font-weight:600}
+.day.today b{border-color:var(--ink)}
+
+/* workout */
+.bar{position:sticky;top:-4px;z-index:2;background:var(--bg);padding:6px 0 8px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:end;border-bottom:1px solid var(--line)}
+.bar h2{font-size:30px;line-height:1;text-transform:uppercase;font-weight:700}
+.clock{font:700 30px/1 var(--f-display);font-variant-numeric:tabular-nums;text-align:right}
+.rest{font-size:14px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.ex{display:flex;flex-direction:column;gap:8px}
+.ex h3{font-size:22px;line-height:1.1;font-weight:600}
+.setup{border:0;background:none;padding:0;text-align:left;font-size:14px;color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.prev{font-size:14px;color:var(--muted)}
+.stack{display:flex;flex-direction:column;gap:3px}
+.plate{display:grid;grid-template-columns:44px minmax(0,1fr) 10px minmax(0,1fr) 88px;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:5px 8px 5px 5px}
+.plate.is-done{background:var(--accent-soft);border-color:var(--accent)}
+.tab{width:44px;height:44px;border-radius:4px;border:2px solid var(--ink);background:var(--surface);font:700 24px/1 var(--f-display);color:var(--ink);padding:0}
+.plate.is-warm .tab{border-style:dashed;border-color:var(--muted);color:var(--muted);font-size:17px}
+.plate.is-done .tab{background:var(--accent);border-color:var(--accent);border-style:solid;color:var(--accent-ink)}
+.fld{display:flex;align-items:baseline;gap:4px;min-width:0}
+.fld input{width:100%;min-width:0;border:0;border-bottom:2px solid var(--line);border-radius:0;background:transparent;padding:2px 0;text-align:right;font:600 25px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.fld input::placeholder{color:var(--muted);opacity:.55}
+.fld input:focus{outline:none;border-bottom-color:var(--accent)}
+.fld span{font-size:12px;color:var(--muted)}
+.x{color:var(--muted);text-align:center}
+.plate select{width:100%;min-height:38px;border:1px solid var(--line);border-radius:4px;background:var(--surface);font-size:16px;padding:0 4px}
+.plate .warm{font-size:12px;color:var(--muted);text-align:center}
+.exa{display:flex;gap:6px;flex-wrap:wrap}
+.exa .btn{min-height:36px;padding:5px 10px;font-size:14px;font-weight:500}
+
+/* history */
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:9px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.sess{display:flex;flex-direction:column;gap:8px}
+.sess-head{display:grid;grid-template-columns:1fr auto;gap:2px 10px;border:0;background:none;padding:0;text-align:left;width:100%}
+.sess-head h3{font-size:22px;font-weight:600;line-height:1.1}
+.sess-head .dur{font:700 22px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.detail{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.detail b{font-weight:600}
+.exrow{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center}
+.exrow svg{display:block}
+.exrow h3{font-size:19px;font-weight:600}
+
+/* routines */
+.edit{display:flex;flex-direction:column;gap:10px}
+.lbl{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.inp{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:9px 10px;font-size:16px;width:100%;min-width:0;color:var(--ink)}
+textarea.inp{min-height:72px;resize:vertical}
+.exedit{display:grid;grid-template-columns:minmax(0,1fr) 52px 52px;gap:6px;align-items:end;border-top:1px solid var(--line);padding-top:8px}
+.exedit .inp{padding:8px}
+.exedit .tools{grid-column:1 / -1;display:flex;gap:6px}
+.exedit .tools .btn{min-height:34px;padding:4px 10px;font-size:14px;font-weight:500}
+
+/* bottom sheet */
+#sheet{position:fixed;inset:0;z-index:10;background:rgba(8,12,24,.55);display:flex;align-items:flex-end;justify-content:center}
+#sheet[hidden]{display:none}
+.sheet{background:var(--surface);color:var(--ink);width:100%;max-width:560px;max-height:88%;overflow-y:auto;border-radius:14px 14px 0 0;padding:16px 16px 22px;padding-bottom:calc(22px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
+.sheet h2{font-size:26px;text-transform:uppercase;font-weight:700}
+.energy{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.energy button{border:1px solid var(--line);border-radius:5px;background:var(--bg);padding:8px 0 6px;font:700 24px/1 var(--f-display);display:flex;flex-direction:column;align-items:center;gap:3px}
+.energy button small{font:400 11px var(--f-body);color:var(--muted)}
+.energy button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.energy button[aria-pressed="true"] small{color:var(--accent-ink)}
+.pick{display:flex;flex-direction:column;gap:6px}
+.pick .btn{text-align:left;font-weight:500}
+@media (prefers-reduced-motion:no-preference){
+  .plate,.tab{transition:background-color .15s,border-color .15s}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand"><i aria-hidden="true"></i>Gymlog</div>
+    <button type="button" class="sync" id="sync" data-a="settings" data-s="off">Niet gekoppeld</button>
+  </header>
+  <main id="view"><p class="muted">Laden…</p></main>
+  <nav class="tabs" aria-label="Onderdelen">
+    <button type="button" data-a="tab" data-tab="vandaag">Vandaag</button>
+    <button type="button" data-a="tab" data-tab="historie">Historie</button>
+    <button type="button" data-a="tab" data-tab="routines">Routines</button>
+  </nav>
+</div>
+<div id="sheet" hidden></div>
+
+<script>
+(function(){
+'use strict';
+
+var TYPES=['Upper','Lower','Anterior','Posterior','Anders'];
+var KEY_DATA='gymlog.data.v1', KEY_ACTIVE='gymlog.active.v1';
+var RIRS=[['','RIR'],['F','Failure'],['0','0 RIR'],['1','1 RIR'],['2','2 RIR'],['3+','3+ RIR']];
+var ENERGY=['slap','matig','oké','goed','top'];
+var URL_RE=/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+
+/*PURE-START*/
+var DAYS=['zo','ma','di','wo','do','vr','za'];
+var MONTHS=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+function parseNum(v){
+  if(v==null) return null;
+  var s=String(v).trim().replace(',','.');
+  if(s==='') return null;
+  var n=Number(s);
+  return isFinite(n)&&n>=0?n:null;
+}
+function fmtNum(n){ return n==null?'':String(Math.round(n*100)/100).replace('.',','); }
+function slug(name){
+  var s=String(name).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80);
+  return s||'oefening';
+}
+function ymd(d){ var p=function(n){return String(n).padStart(2,'0');}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+function fromYmd(s){ var a=s.split('-').map(Number); return new Date(a[0],a[1]-1,a[2]); }
+function fmtDate(s){ var d=fromYmd(s); return DAYS[d.getDay()]+' '+d.getDate()+' '+MONTHS[d.getMonth()]; }
+function fmtClock(ms){
+  var t=Math.max(0,Math.floor(ms/1000)), h=Math.floor(t/3600), m=Math.floor(t%3600/60), s=t%60;
+  var p=function(n){return String(n).padStart(2,'0');};
+  return h?h+':'+p(m)+':'+p(s):m+':'+p(s);
+}
+function mondayOf(d){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; }
+function filled(s){ return s.r!=null&&s.r>0; }
+/* Epley estimate so 100x6 and 105x5 can be compared; bodyweight sets compare on reps */
+function score(s){ var w=s.w||0; return w>0?w*(1+s.r/30):s.r; }
+function bestScore(sets){
+  var b=null;
+  for(var i=0;i<sets.length;i++){ var s=sets[i]; if(s.k==='s'&&filled(s)){ var v=score(s); if(b==null||v>b) b=v; } }
+  return b;
+}
+function compareSets(cur,prev){
+  var a=bestScore(cur), b=bestScore(prev);
+  if(a==null||b==null) return null;
+  if(a>b*1.01) return 'up';
+  if(a<b*0.99) return 'down';
+  return 'same';
+}
+function sortWorkouts(ws){ return ws.slice().sort(function(a,b){ return a.date===b.date?(b.startedAt||0)-(a.startedAt||0):(a.date<b.date?1:-1); }); }
+/* workouts must be sorted newest first */
+function prevFor(workouts,exId,excludeId){
+  for(var i=0;i<workouts.length;i++){
+    var w=workouts[i];
+    if(w.id===excludeId) continue;
+    var ex=(w.exercises||[]).filter(function(e){return e.exId===exId;})[0];
+    if(ex&&ex.sets.some(function(s){return s.r!=null||s.w!=null;})) return {date:w.date,sets:ex.sets};
+  }
+  return null;
+}
+function prevSet(prev,sets,j){
+  if(!prev) return null;
+  var kind=sets[j].k, idx=0;
+  for(var i=0;i<j;i++) if(sets[i].k===kind) idx++;
+  var c=prev.sets.filter(function(s){return s.k===kind&&(s.w!=null||s.r!=null);});
+  return c[idx]||c[c.length-1]||null;
+}
+function summarize(workout,workouts){
+  var r={up:0,same:0,down:0,compared:0};
+  workout.exercises.forEach(function(ex){
+    var p=prevFor(workouts,ex.exId,workout.id); if(!p) return;
+    var c=compareSets(ex.sets,p.sets); if(!c) return;
+    r[c]++; r.compared++;
+  });
+  return r;
+}
+function setText(s){
+  var t=(s.w!=null?fmtNum(s.w):'–')+'×'+(s.r!=null?s.r:'–');
+  if(s.k==='s'&&s.rir) t+=s.rir==='F'?' · failure':' · '+s.rir+' RIR';
+  return t;
+}
+function setsText(sets,kind){
+  return sets.filter(function(s){return s.k===kind&&(s.w!=null||s.r!=null);}).map(setText).join(', ');
+}
+function progressText(p){ return p&&p.compared?'▲'+p.up+' ='+p.same+' ▼'+p.down:''; }
+function newWorkout(routine,now,id){
+  return {id:id,status:'active',date:ymd(now),startedAt:now.getTime(),finishedAt:null,durationMin:null,
+    routineId:routine.id,routineName:routine.name,type:routine.type,energy:null,note:'',lastSetAt:null,
+    updatedAt:now.getTime(),progress:null,
+    exercises:(routine.exercises||[]).map(function(e){
+      var sets=[],i;
+      for(i=0;i<(e.warmups||0);i++) sets.push({k:'w',w:null,r:null,rir:'',done:false});
+      for(i=0;i<(e.sets||0);i++) sets.push({k:'s',w:null,r:null,rir:'',done:false});
+      return {exId:e.exId,name:e.name,sets:sets};
+    })};
+}
+/* Adds what the sheet has and the phone lacks. Returns true when the phone's routines should be pushed back. */
+function mergePull(S,r,replaceConfig){
+  var have={}; S.workouts.forEach(function(w){ have[w.id]=1; }); if(S.active) have[S.active.id]=1;
+  (r.workouts||[]).forEach(function(w){
+    if(w&&w.id&&!have[w.id]&&S.settings.deletes.indexOf(w.id)<0){ w.sync='sent'; S.workouts.push(w); have[w.id]=1; }
+  });
+  S.workouts=sortWorkouts(S.workouts);
+  if(replaceConfig||!S.routines.length){
+    if((r.routines||[]).length) S.routines=r.routines.slice().sort(function(a,b){return (a.order||0)-(b.order||0);});
+    Object.keys(r.exercises||{}).forEach(function(k){ S.exercises[k]=r.exercises[k]; });
+    return false;
+  }
+  return true;
+}
+/*PURE-END*/
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function lsGet(k){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
+function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
+var $=function(id){ return document.getElementById(id); };
+
+var S={routines:[],exercises:{},workouts:[],active:null,
+  settings:{url:'',lastSync:0,configDirty:false,deletes:[]},
+  tab:'vandaag',histMode:'sessies',openSess:null,edit:null,flash:null,fin:null,sheetKind:null,storeErr:false,pendingDel:null};
+var SY={busy:false,err:''};
+
+/* ---------- storage on this phone ---------- */
+function persist(){
+  var ok=lsSet(KEY_DATA,{routines:S.routines,exercises:S.exercises,workouts:S.workouts,settings:S.settings});
+  if(!ok) S.storeErr=true;
+  return ok;
+}
+var draftTimer=null;
+function persistActive(){ clearTimeout(draftTimer); if(S.active){ if(!lsSet(KEY_ACTIVE,S.active)) S.storeErr=true; } else lsDel(KEY_ACTIVE); }
+function touch(){ if(!S.active) return; S.active.updatedAt=Date.now(); clearTimeout(draftTimer); draftTimer=setTimeout(persistActive,300); }
+function configChanged(){ if(S.settings.url) S.settings.configDirty=true; persist(); syncAll(); }
+function boot(){
+  var d=lsGet(KEY_DATA);
+  if(d){
+    S.routines=d.routines||[]; S.exercises=d.exercises||{}; S.workouts=sortWorkouts(d.workouts||[]);
+    S.settings=Object.assign(S.settings,d.settings||{}); if(!Array.isArray(S.settings.deletes)) S.settings.deletes=[];
+  }
+  var a=lsGet(KEY_ACTIVE); if(a&&a.status==='active') S.active=a;
+  route(); render();
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(function(){}); }catch(e){}
+  try{ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){}); }catch(e){}
+  syncAll();
+}
+
+/* ---------- link with the Google Sheet ---------- */
+async function request(url,opts){
+  var ctl=new AbortController(), t=setTimeout(function(){ ctl.abort(); },25000), res, txt, j;
+  try{
+    res=await fetch(url,Object.assign({redirect:'follow',signal:ctl.signal},opts||{}));
+    txt=await res.text();
+  }catch(e){ throw {code:e&&e.name==='AbortError'?'timeout':'network'}; }
+  finally{ clearTimeout(t); }
+  try{ j=JSON.parse(txt); }catch(e){ throw {code:'notjson'}; }
+  if(!j||!j.ok) throw {code:'script',message:(j&&j.error)||''};
+  return j;
+}
+function apiPost(body){ return request(S.settings.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)}); }
+function apiGet(url,query){ return request(url+'?'+query); }
+function apiMessage(e){
+  var c=e&&e.code;
+  if(c==='script') return 'Het script in je sheet gaf een fout: '+String(e.message||'onbekend').slice(0,140);
+  if(c==='notjson') return 'De koppeling gaf geen geldig antwoord. Controleer in Apps Script of bij "Wie heeft toegang" Iedereen staat en of je de URL van de web-app hebt geplakt.';
+  if(c==='timeout') return 'Google reageerde niet binnen 25 seconden. De app probeert het later opnieuw.';
+  return 'Geen verbinding. Je training staat veilig op je telefoon en wordt later verstuurd.';
+}
+async function sendWorkout(w){
+  var c=clone(w); delete c.sync;
+  try{ await apiPost({action:'save',workout:c}); }
+  catch(e){
+    if(e&&e.code==='script') throw e;
+    /* The answer to a POST can get lost on the way back; ask the sheet whether it arrived before retrying. */
+    var r=await apiGet(S.settings.url,'action=has&id='+encodeURIComponent(w.id));
+    if(!r.has) throw e;
+  }
+}
+function pendingCount(){
+  return S.workouts.filter(function(w){ return w.sync!=='sent'; }).length+(S.settings.configDirty?1:0)+S.settings.deletes.length;
+}
+async function syncAll(){
+  if(!S.settings.url||SY.busy) return;
+  if(!pendingCount()){ paintSync(); return; }
+  SY.busy=true; SY.err=''; paintSync();
+  try{
+    while(S.settings.deletes.length){ await apiPost({action:'delete',id:S.settings.deletes[0]}); S.settings.deletes.shift(); persist(); }
+    if(S.settings.configDirty){
+      S.settings.configDirty=false;
+      try{ await apiPost({action:'config',routines:S.routines,exercises:S.exercises}); }
+      catch(e){ S.settings.configDirty=true; throw e; }
+      persist();
+    }
+    var todo=S.workouts.filter(function(w){ return w.sync!=='sent'; }).reverse();
+    for(var i=0;i<todo.length;i++){ await sendWorkout(todo[i]); todo[i].sync='sent'; persist(); }
+    S.settings.lastSync=Date.now(); persist();
+  }catch(e){ SY.err=apiMessage(e); }
+  SY.busy=false;
+  afterSync();
+  if(pendingCount()&&!SY.err) syncAll();
+}
+function afterSync(){
+  paintSync();
+  if(S.sheetKind==='settings') settingsSheet();
+  else if($('sheet').hidden&&!S.edit&&!(S.tab==='vandaag'&&S.active)) render();
+}
+function paintSync(){
+  var el=$('sync'), n=pendingCount();
+  if(!S.settings.url){ el.dataset.s='off'; el.textContent='Niet gekoppeld'; }
+  else if(SY.busy){ el.dataset.s='busy'; el.textContent='Versturen…'; }
+  else if(SY.err&&n){ el.dataset.s='err'; el.textContent=n+' niet verstuurd'; }
+  else if(n){ el.dataset.s='wait'; el.textContent=n+' te versturen'; }
+  else{ el.dataset.s='ok'; el.textContent='Gekoppeld'; }
+}
+
+/* ---------- render ---------- */
+function route(){
+  var hsh=(location.hash||'').replace('#','');
+  S.tab=(hsh==='historie'||hsh==='routines')?hsh:'vandaag';
+}
+function render(){
+  Array.prototype.forEach.call(document.querySelectorAll('.tabs button'),function(b){
+    if(b.dataset.tab===S.tab) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
+    if(b.dataset.tab==='vandaag') b.textContent=S.active?'Training':'Vandaag';
+  });
+  paintSync();
+  var html='';
+  if(S.tab==='historie') html=viewHistory();
+  else if(S.tab==='routines') html=viewRoutines();
+  else html=S.active?viewWorkout():viewStart();
+  $('view').innerHTML=notices()+html;
+  tick();
+}
+function notices(){
+  var o='';
+  if(S.flash) o+='<div class="note '+(S.flash.ok?'ok':'')+'" role="status"><span>'+esc(S.flash.msg)+'</span><button class="btn" data-a="flash-x">Sluiten</button></div>';
+  if(S.storeErr) o+='<div class="note"><span>Opslaan op je telefoon lukt niet (opslag vol of geblokkeerd). Rond je training af terwijl je bereik hebt, dan staat hij in je sheet.</span></div>';
+  return o;
+}
+function standalone(){
+  try{ return window.navigator.standalone===true||window.matchMedia('(display-mode: standalone)').matches; }catch(e){ return false; }
+}
+function routineStats(r){
+  var sets=0; (r.exercises||[]).forEach(function(e){ sets+=(e.sets||0); });
+  var last=S.workouts.filter(function(w){return w.routineId===r.id;})[0];
+  return (r.exercises||[]).length+' oefeningen · '+sets+' sets'+(last?' · laatst '+fmtDate(last.date):'');
+}
+function viewStart(){
+  var o='';
+  if(!standalone()) o+='<div class="note"><span>Zet Gymlog eerst op je beginscherm: tik op Deel en kies "Zet op beginscherm". Open hem daarna via het icoon en koppel dan pas je logboek, want het icoon heeft zijn eigen opslag.</span></div>';
+  if(!S.settings.url) o+='<section class="card group"><h3 style="font-size:24px;text-transform:uppercase">Koppel je logboek</h3><p class="muted">Plak de URL van het script in je Google Sheet. De app haalt dan je routines op en zet elke afgeronde training in je sheet.</p><div class="row"><button class="btn primary" data-a="settings">Koppelen</button></div></section>';
+  o+='<section class="group"><p class="eyebrow">Start een training</p>';
+  if(!S.routines.length) o+='<div class="card muted">Nog geen routines. Koppel je logboek om ze op te halen, of maak er een aan onder Routines.</div>';
+  S.routines.forEach(function(r){
+    o+='<button class="routine" data-a="start" data-id="'+esc(r.id)+'"><h3>'+esc(r.name)+'</h3><span class="go">Start</span><span class="small muted">'+esc(r.type)+' · '+esc(routineStats(r))+'</span></button>';
+  });
+  o+='</section>';
+
+  var now=new Date(), mon=mondayOf(now), today=ymd(now), cnt=0, days='';
+  for(var i=0;i<7;i++){
+    var d=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i), key=ymd(d);
+    var w=S.workouts.filter(function(x){return x.date===key;})[0];
+    if(w) cnt++;
+    days+='<div class="day'+(w?' on':'')+(key===today?' today':'')+'"><b>'+(w?esc((w.type||'?').charAt(0)):'')+'</b>'+DAYS[d.getDay()]+'</div>';
+  }
+  o+='<section class="card"><div class="row spread"><p class="eyebrow">Deze week</p><p class="eyebrow">'+cnt+(cnt===1?' sessie':' sessies')+'</p></div><div class="week">'+days+'</div></section>';
+
+  if(S.workouts.length){
+    o+='<section class="group"><p class="eyebrow">Laatste sessies</p>';
+    S.workouts.slice(0,3).forEach(function(w){ o+=sessCard(w,false); });
+    o+='</section>';
+  }
+  return o;
+}
+
+function pillHtml(c){
+  if(c==='up') return '<span class="pill up">▲ meer</span>';
+  if(c==='down') return '<span class="pill down">▼ minder</span>';
+  if(c==='same') return '<span class="pill same">= gelijk</span>';
+  return '';
+}
+function exCard(i){
+  var w=S.active, ex=w.exercises[i], meta=S.exercises[ex.exId]||{};
+  var prev=prevFor(S.workouts,ex.exId,w.id);
+  var o='<section class="card ex" data-ex="'+i+'"><div class="row spread"><h3>'+esc(ex.name)+'</h3><span data-pill>'+pillHtml(prev?compareSets(ex.sets,prev.sets):null)+'</span></div>';
+  o+='<button class="setup" data-a="setup" data-ex="'+i+'">'+(meta.setup?'Instelling: '+esc(meta.setup):'+ Machine-instelling noteren')+'</button>';
+  o+='<p class="prev">'+(prev?'Vorige keer, '+esc(fmtDate(prev.date))+': '+esc(setsText(prev.sets,'s')||'geen werksets'):'Nog niet eerder gelogd in deze app')+'</p>';
+  o+='<div class="stack">';
+  var n=0;
+  ex.sets.forEach(function(s,j){
+    var p=prevSet(prev,ex.sets,j), warm=s.k==='w'; if(!warm) n++;
+    o+='<div class="plate'+(warm?' is-warm':'')+(s.done?' is-done':'')+'" data-ex="'+i+'" data-set="'+j+'">'
+      +'<button class="tab" data-a="toggle" aria-pressed="'+(s.done?'true':'false')+'" aria-label="'+(warm?'Warm-up':'Set '+n)+' afvinken">'+(s.done?'✓':(warm?'W':n))+'</button>'
+      +'<label class="fld"><input id="w-'+i+'-'+j+'" data-f="w" inputmode="decimal" autocomplete="off" value="'+esc(fmtNum(s.w))+'" placeholder="'+esc(p&&p.w!=null?fmtNum(p.w):'')+'" aria-label="Gewicht in kilo"><span>kg</span></label>'
+      +'<span class="x">×</span>'
+      +'<label class="fld"><input id="r-'+i+'-'+j+'" data-f="r" inputmode="numeric" autocomplete="off" value="'+(s.r!=null?s.r:'')+'" placeholder="'+(p&&p.r!=null?p.r:'')+'" aria-label="Herhalingen"><span>reps</span></label>';
+    if(warm) o+='<span class="warm">warm-up</span>';
+    else{
+      o+='<select id="rir-'+i+'-'+j+'" data-f="rir" aria-label="Reps in reserve">';
+      RIRS.forEach(function(r){ o+='<option value="'+r[0]+'"'+(s.rir===r[0]?' selected':'')+'>'+r[1]+'</option>'; });
+      o+='</select>';
+    }
+    o+='</div>';
+  });
+  o+='</div><div class="exa"><button class="btn" data-a="addset" data-ex="'+i+'">+ set</button><button class="btn" data-a="addwarm" data-ex="'+i+'">+ warm-up</button>';
+  o+=ex.sets.length?'<button class="btn ghost" data-a="delset" data-ex="'+i+'">Laatste set weg</button>':'<button class="btn ghost danger" data-a="delex" data-ex="'+i+'">Oefening weghalen</button>';
+  o+='</div></section>';
+  return o;
+}
+function viewWorkout(){
+  var w=S.active;
+  var o='<div class="bar"><h2>'+esc(w.routineName)+'</h2><div class="clock" id="clock">0:00</div><div class="small muted">'+esc(fmtDate(w.date))+' · '+esc(w.type)+'</div><div class="rest" id="rest"></div></div>';
+  w.exercises.forEach(function(e,i){ o+=exCard(i); });
+  o+='<button class="btn" data-a="addex">+ Oefening toevoegen</button>';
+  o+='<button class="btn primary big" data-a="finish">Training afronden</button>';
+  o+='<button class="btn ghost danger" data-a="discard">Training weggooien</button>';
+  return o;
+}
+function tick(){
+  var w=S.active; if(!w) return;
+  var c=$('clock'), r=$('rest'), now=Date.now();
+  if(c) c.textContent=fmtClock(now-w.startedAt);
+  if(r) r.textContent=w.lastSetAt?'rust '+fmtClock(now-w.lastSetAt):'nog geen set afgevinkt';
+}
+
+function sheetPill(w){
+  if(w.imported) return '<span class="pill info">overgenomen</span>';
+  if(w.sync==='sent') return '<span class="pill acc">in logboek</span>';
+  if(S.settings.url) return '<span class="pill same">wacht op versturen</span>';
+  return '<span class="pill info">alleen op telefoon</span>';
+}
+function sessCard(w,full){
+  var open=full&&S.openSess===w.id, p=w.progress;
+  var o='<article class="card sess"><button class="sess-head" '+(full?'data-a="open" data-id="'+esc(w.id)+'" aria-expanded="'+(open?'true':'false')+'"':'data-a="tab" data-tab="historie"')+'>'
+    +'<h3>'+esc(w.routineName)+'</h3><span class="dur">'+(w.durationMin!=null?w.durationMin+' min':'')+'</span>'
+    +'<span class="small muted">'+esc(fmtDate(w.date))+' · '+esc(w.type)+(w.energy?' · energie '+w.energy+'/5':'')+'</span></button>';
+  o+='<div class="row">';
+  if(p&&p.compared){ if(p.up) o+='<span class="pill up">▲ '+p.up+'</span>'; if(p.same) o+='<span class="pill same">= '+p.same+'</span>'; if(p.down) o+='<span class="pill down">▼ '+p.down+'</span>'; }
+  o+=sheetPill(w)+'</div>';
+  if(open){
+    o+='<div class="detail">';
+    if(w.note) o+='<p>'+esc(w.note)+'</p>';
+    (w.exercises||[]).forEach(function(e){
+      var ws=setsText(e.sets,'s'), wu=setsText(e.sets,'w');
+      if(!ws&&!wu) return;
+      o+='<div><b>'+esc(e.name)+'</b><br>'+esc(ws||'geen werksets')+(wu?' <span class="muted">(warm-up '+esc(wu)+')</span>':'')+'</div>';
+    });
+    o+='<div class="row"><button class="btn ghost danger" data-a="delsess" data-id="'+esc(w.id)+'">Verwijderen</button></div></div>';
+  }
+  return o+'</article>';
+}
+function spark(vals){
+  if(vals.length<2) return '';
+  var W=84,H=28,mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),rg=(mx-mn)||1;
+  var pts=vals.map(function(v,i){ return [(3+i*(W-6)/(vals.length-1)).toFixed(1),(H-4-(v-mn)/rg*(H-8)).toFixed(1)]; });
+  var last=pts[pts.length-1];
+  return '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Verloop over '+vals.length+' sessies"><polyline fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="'+pts.map(function(p){return p.join(',');}).join(' ')+'"/><circle cx="'+last[0]+'" cy="'+last[1]+'" r="3" fill="var(--accent)"/></svg>';
+}
+function viewHistory(){
+  var o='<div class="seg" role="group" aria-label="Weergave"><button data-a="hist" data-m="sessies" aria-pressed="'+(S.histMode==='sessies')+'">Sessies</button><button data-a="hist" data-m="oefeningen" aria-pressed="'+(S.histMode==='oefeningen')+'">Oefeningen</button></div>';
+  if(!S.workouts.length) return o+'<div class="card muted">Nog geen afgeronde trainingen.</div>';
+  if(S.histMode==='sessies'){ S.workouts.forEach(function(w){ o+=sessCard(w,true); }); return o; }
+  var by={}, order=[];
+  S.workouts.slice().reverse().forEach(function(w){
+    (w.exercises||[]).forEach(function(e){
+      var b=bestScore(e.sets); if(b==null) return;
+      if(!by[e.exId]){ by[e.exId]={name:e.name,vals:[],top:null,date:null}; order.push(e.exId); }
+      var top=null; e.sets.forEach(function(s){ if(s.k==='s'&&filled(s)&&(!top||score(s)>score(top))) top=s; });
+      by[e.exId].vals.push(b); by[e.exId].top=top; by[e.exId].date=w.date; by[e.exId].name=e.name;
+    });
+  });
+  if(!order.length) return o+'<div class="card muted">Nog geen ingevulde werksets.</div>';
+  order.sort(function(a,b){ return by[a].name.localeCompare(by[b].name); });
+  o+='<section class="card group">';
+  order.forEach(function(id,k){
+    var x=by[id], n=x.vals.length, c=n>1?(x.vals[n-1]>x.vals[n-2]*1.01?'up':x.vals[n-1]<x.vals[n-2]*0.99?'down':'same'):null;
+    o+='<div class="exrow"'+(k?' style="border-top:1px solid var(--line);padding-top:8px"':'')+'><h3>'+esc(x.name)+'</h3>'+spark(x.vals)
+      +'<span class="small muted">Beste set '+esc(fmtDate(x.date))+': <span class="num">'+esc(setText(x.top))+'</span> · '+n+(n===1?' sessie':' sessies')+'</span><span>'+pillHtml(c)+'</span></div>';
+  });
+  return o+'</section>';
+}
+
+function viewRoutines(){
+  if(S.edit) return editRoutine();
+  var o='<section class="group"><p class="eyebrow">Je routines</p>';
+  if(!S.routines.length) o+='<div class="card muted">Nog geen routines.</div>';
+  S.routines.forEach(function(r){
+    o+='<article class="card group"><div class="row spread"><h3 style="font-size:24px;text-transform:uppercase">'+esc(r.name)+'</h3><span class="pill info">'+esc(r.type)+'</span></div><div class="small muted">';
+    o+=(r.exercises||[]).map(function(e){ return esc(e.name)+' <span class="num">'+(e.warmups||0)+'+'+(e.sets||0)+'</span>'; }).join(' · ');
+    o+='</div><div class="row"><button class="btn" data-a="redit" data-id="'+esc(r.id)+'">Bewerken</button></div></article>';
+  });
+  o+='<button class="btn" data-a="rnew">+ Nieuwe routine</button><p class="small muted">De cijfers achter een oefening zijn warm-upsets + werksets.</p></section>';
+  return o;
+}
+function editRoutine(){
+  var r=S.edit;
+  var o='<section class="card edit"><h2 style="font-size:26px;text-transform:uppercase">'+(r.isNew?'Nieuwe routine':'Routine bewerken')+'</h2>';
+  o+='<label class="lbl" for="rname">Naam<input class="inp" id="rname" data-r="name" value="'+esc(r.name)+'"></label>';
+  o+='<label class="lbl" for="rtype">Type in je logboek<select class="inp" id="rtype" data-r="type">'+TYPES.map(function(t){return '<option'+(t===r.type?' selected':'')+'>'+t+'</option>';}).join('')+'</select></label>';
+  r.exercises.forEach(function(e,i){
+    o+='<div class="exedit"><label class="lbl" for="en'+i+'">Oefening '+(i+1)+'<input class="inp" id="en'+i+'" data-r="exname" data-i="'+i+'" value="'+esc(e.name)+'"></label>'
+      +'<label class="lbl" for="ew'+i+'">Warm<input class="inp" id="ew'+i+'" data-r="warmups" data-i="'+i+'" inputmode="numeric" value="'+esc(e.warmups==null?0:e.warmups)+'"></label>'
+      +'<label class="lbl" for="es'+i+'">Sets<input class="inp" id="es'+i+'" data-r="sets" data-i="'+i+'" inputmode="numeric" value="'+esc(e.sets==null?0:e.sets)+'"></label>'
+      +'<div class="tools"><button class="btn" data-a="rup" data-i="'+i+'"'+(i?'':' disabled')+' aria-label="Omhoog">↑</button><button class="btn" data-a="rdown" data-i="'+i+'"'+(i<r.exercises.length-1?'':' disabled')+' aria-label="Omlaag">↓</button><button class="btn ghost danger" data-a="rdelex" data-i="'+i+'">Weghalen</button></div></div>';
+  });
+  o+='<button class="btn" data-a="raddex">+ Oefening</button>';
+  o+='<p class="small muted">Een oefening met dezelfde naam deelt zijn historie tussen routines. Hernoem je hem, dan begint de historie opnieuw.</p>';
+  o+='<div class="row"><button class="btn primary" data-a="rsave">Opslaan</button><button class="btn" data-a="rcancel">Annuleren</button>';
+  if(!r.isNew) o+='<button class="btn ghost danger" data-a="rdel">Routine verwijderen</button>';
+  return o+'</div></section>';
+}
+
+/* ---------- bottom sheets ---------- */
+function openSheet(html,kind){ var s=$('sheet'); S.sheetKind=kind||'plain'; s.innerHTML='<div class="sheet" role="dialog" aria-modal="true">'+html+'</div>'; s.hidden=false; var f=s.querySelector('[data-focus]'); if(f) f.focus(); }
+function closeSheet(){ var s=$('sheet'); s.hidden=true; s.innerHTML=''; S.fin=null; S.sheetKind=null; }
+function confirmSheet(title,text,label,action){
+  openSheet('<h2>'+esc(title)+'</h2><p>'+esc(text)+'</p><div class="row"><button class="btn primary" data-a="'+action+'">'+esc(label)+'</button><button class="btn" data-a="close">Annuleren</button></div>');
+}
+function finishSheet(){
+  var w=S.active, f=S.fin, p=summarize(w,S.workouts), done=0;
+  w.exercises.forEach(function(e){ e.sets.forEach(function(s){ if(s.k==='s'&&filled(s)) done++; }); });
+  var o='<h2>Training afronden</h2><p class="muted">'+done+(done===1?' werkset':' werksets')+' ingevuld'+(p.compared?' · '+esc(progressText(p))+' ten opzichte van vorige keer':'')+'</p>';
+  o+='<div><p class="eyebrow">Energie</p><div class="energy">';
+  for(var i=1;i<=5;i++) o+='<button data-a="energy" data-v="'+i+'" aria-pressed="'+(f.energy===i)+'">'+i+'<small>'+ENERGY[i-1]+'</small></button>';
+  o+='</div></div>';
+  o+='<label class="lbl" for="fdur">Duur in minuten<input class="inp" id="fdur" data-fin="dur" inputmode="numeric" value="'+esc(f.dur)+'"></label>';
+  o+='<label class="lbl" for="fnote">Notitie<textarea class="inp" id="fnote" data-fin="note" placeholder="Hoe ging het?">'+esc(f.note)+'</textarea></label>';
+  if(f.err) o+='<div class="note">'+esc(f.err)+'</div>';
+  o+='<div class="row"><button class="btn primary" data-a="finish-go">Afronden</button><button class="btn" data-a="close">Terug naar training</button></div>';
+  openSheet(o,'finish');
+}
+function settingsSheet(msg){
+  var n=pendingCount(), o='<h2>Koppeling met je logboek</h2>';
+  if(!S.settings.url){
+    o+='<p class="muted">Plak hier de web-app-URL uit Apps Script. Hij begint met https://script.google.com/macros/s/ en eindigt op /exec.</p>';
+    o+='<label class="lbl" for="surl">Web-app-URL<input class="inp" id="surl" data-focus inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></label>';
+    if(msg||SY.err) o+='<div class="note">'+esc(msg||SY.err)+'</div>';
+    o+='<div class="row"><button class="btn primary" data-a="connect"'+(SY.busy?' disabled':'')+'>'+(SY.busy?'Bezig…':'Koppelen')+'</button><button class="btn" data-a="close">Sluiten</button></div>';
+  } else {
+    o+='<p>Gekoppeld met je Google Sheet. '+(n?n+(n===1?' wijziging wacht':' wijzigingen wachten')+' op versturen.':'Alles is verstuurd.')+(S.settings.lastSync?' Laatst verstuurd: '+esc(new Date(S.settings.lastSync).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+'.':'')+'</p>';
+    if(msg||SY.err) o+='<div class="note">'+esc(msg||SY.err)+'</div>';
+    o+='<div class="pick"><button class="btn primary" data-a="syncnow"'+(SY.busy?' disabled':'')+'>'+(SY.busy?'Bezig…':'Nu versturen')+'</button>';
+    o+='<button class="btn" data-a="pull"'+(SY.busy?' disabled':'')+'>Ophalen uit je sheet</button></div>';
+    o+='<p class="small muted">Ophalen voegt trainingen toe die op deze telefoon ontbreken en vervangt je routines door de versie uit je sheet.</p>';
+    o+='<div class="row"><button class="btn" data-a="close">Sluiten</button><button class="btn ghost danger" data-a="unlink">Ontkoppelen</button></div>';
+  }
+  o+='<div class="row"><button class="btn ghost" data-a="backup">Kopie van alle gegevens naar klembord</button></div>';
+  openSheet(o,'settings');
+}
+
+/* ---------- actions ---------- */
+function rerenderCard(i){
+  var el=document.querySelector('section.ex[data-ex="'+i+'"]'); if(!el){ render(); return; }
+  var t=document.createElement('div'); t.innerHTML=exCard(i); el.replaceWith(t.firstChild);
+}
+function updatePill(i){
+  var el=document.querySelector('section.ex[data-ex="'+i+'"] [data-pill]'); if(!el) return;
+  var ex=S.active.exercises[i], prev=prevFor(S.workouts,ex.exId,S.active.id);
+  el.innerHTML=pillHtml(prev?compareSets(ex.sets,prev.sets):null);
+}
+function blankSet(k){ return {k:k,w:null,r:null,rir:'',done:false}; }
+var A={
+  tab:function(el){ S.tab=el.dataset.tab; S.edit=null; try{ location.hash=S.tab; }catch(e){} render(); $('view').scrollTop=0; },
+  'flash-x':function(){ S.flash=null; render(); },
+  settings:function(){ settingsSheet(); },
+  connect:async function(){
+    if(SY.busy) return;
+    var url=$('surl').value.trim();
+    if(!URL_RE.test(url)){ settingsSheet('Dit is niet de web-app-URL. Hij begint met https://script.google.com/macros/s/ en eindigt op /exec.'); $('surl').value=url; return; }
+    SY.busy=true; SY.err=''; settingsSheet(); $('surl').value=url;
+    try{
+      var r=await apiGet(url,'action=pull');
+      S.settings.url=url;
+      if(mergePull(S,r,false)) S.settings.configDirty=true;
+      persist(); SY.busy=false;
+      S.flash={ok:true,msg:'Gekoppeld. '+S.routines.length+' routines en '+S.workouts.length+(S.workouts.length===1?' training':' trainingen')+' staan op je telefoon.'};
+      closeSheet(); render(); syncAll();
+    }catch(e){ SY.busy=false; settingsSheet(apiMessage(e)); if($('surl')) $('surl').value=url; paintSync(); }
+  },
+  syncnow:function(){ if(pendingCount()) syncAll(); else settingsSheet('Er staat niets te wachten.'); },
+  pull:async function(){
+    if(SY.busy) return;
+    SY.busy=true; SY.err=''; settingsSheet();
+    try{
+      var r=await apiGet(S.settings.url,'action=pull');
+      mergePull(S,r,true); S.settings.configDirty=false; persist(); SY.busy=false;
+      S.flash={ok:true,msg:'Opgehaald uit je sheet.'}; closeSheet(); render();
+    }catch(e){ SY.busy=false; settingsSheet(apiMessage(e)); paintSync(); }
+  },
+  unlink:function(){ S.settings.url=''; S.settings.configDirty=false; S.settings.deletes=[]; SY.err=''; persist(); closeSheet(); render(); },
+  backup:function(){
+    var txt=JSON.stringify({routines:S.routines,exercises:S.exercises,workouts:S.workouts,active:S.active});
+    try{
+      navigator.clipboard.writeText(txt).then(function(){ settingsSheet('Kopie staat op je klembord. Plak hem in Notities om hem te bewaren.'); },function(){ settingsSheet('Kopiëren is geblokkeerd op dit toestel.'); });
+    }catch(e){ settingsSheet('Kopiëren is geblokkeerd op dit toestel.'); }
+  },
+  start:function(el){
+    if(S.active) return;
+    var r=S.routines.filter(function(x){return x.id===el.dataset.id;})[0]; if(!r) return;
+    S.active=newWorkout(r,new Date(),uid()); S.flash=null; persistActive(); render(); $('view').scrollTop=0;
+  },
+  toggle:function(el){
+    var row=el.closest('.plate'), i=+row.dataset.ex, j=+row.dataset.set, ex=S.active.exercises[i], s=ex.sets[j];
+    s.done=!s.done;
+    if(s.done){
+      var p=prevSet(prevFor(S.workouts,ex.exId,S.active.id),ex.sets,j);
+      if(p){ if(s.w==null&&p.w!=null) s.w=p.w; if(s.r==null&&p.r!=null) s.r=p.r; }
+      S.active.lastSetAt=Date.now();
+    }
+    S.active.updatedAt=Date.now(); persistActive(); rerenderCard(i); tick();
+  },
+  addset:function(el){ var i=+el.dataset.ex; S.active.exercises[i].sets.push(blankSet('s')); persistActive(); rerenderCard(i); },
+  addwarm:function(el){
+    var i=+el.dataset.ex, sets=S.active.exercises[i].sets, at=0;
+    sets.forEach(function(s,j){ if(s.k==='w') at=j+1; });
+    sets.splice(at,0,blankSet('w')); persistActive(); rerenderCard(i);
+  },
+  delset:function(el){ var i=+el.dataset.ex; S.active.exercises[i].sets.pop(); persistActive(); rerenderCard(i); },
+  delex:function(el){ S.active.exercises.splice(+el.dataset.ex,1); persistActive(); render(); },
+  setup:function(el){
+    var i=+el.dataset.ex, ex=S.active.exercises[i], cur=(S.exercises[ex.exId]||{}).setup||'';
+    openSheet('<h2>Machine-instelling</h2><label class="lbl" for="setupv">'+esc(ex.name)+'<input class="inp" id="setupv" data-focus value="'+esc(cur)+'" placeholder="Bijvoorbeeld: seat op 2"></label><p class="small muted">Blijft bij deze oefening staan, ook in andere routines.</p><div class="row"><button class="btn primary" data-a="setup-save" data-ex="'+i+'">Bewaren</button><button class="btn" data-a="close">Annuleren</button></div>');
+  },
+  'setup-save':function(el){
+    var i=+el.dataset.ex, ex=S.active.exercises[i], v=$('setupv').value.trim();
+    S.exercises[ex.exId]={name:ex.name,setup:v}; closeSheet(); rerenderCard(i); configChanged();
+  },
+  addex:function(){
+    var have={}; S.active.exercises.forEach(function(e){ have[e.exId]=1; });
+    var ids=Object.keys(S.exercises).filter(function(id){return !have[id];}).sort(function(a,b){ return S.exercises[a].name.localeCompare(S.exercises[b].name); });
+    var o='<h2>Oefening toevoegen</h2><div class="row"><input class="inp" id="newex" placeholder="Nieuwe oefening" style="flex:1" aria-label="Naam van nieuwe oefening"><button class="btn primary" data-a="addex-new">Toevoegen</button></div><div class="pick">';
+    ids.forEach(function(id){ o+='<button class="btn" data-a="addex-pick" data-id="'+esc(id)+'">'+esc(S.exercises[id].name)+'</button>'; });
+    openSheet(o+'</div><button class="btn" data-a="close">Annuleren</button>');
+  },
+  'addex-pick':function(el){ addExercise(el.dataset.id,S.exercises[el.dataset.id].name); },
+  'addex-new':function(){
+    var n=$('newex').value.trim(); if(!n) return;
+    var id=slug(n), isNew=!S.exercises[id];
+    if(isNew) S.exercises[id]={name:n,setup:''};
+    addExercise(id,S.exercises[id].name); if(isNew) configChanged();
+  },
+  close:function(){ closeSheet(); },
+  discard:function(){ confirmSheet('Training weggooien?','Alles wat je in deze training hebt ingevuld, verdwijnt.','Weggooien','discard-go'); },
+  'discard-go':function(){ S.active=null; persistActive(); closeSheet(); render(); },
+  finish:function(){
+    var w=S.active;
+    S.fin={energy:w.energy,dur:String(Math.max(1,Math.round((Date.now()-w.startedAt)/60000))),note:w.note||'',err:null};
+    finishSheet();
+  },
+  energy:function(el){ S.fin.energy=+el.dataset.v; Array.prototype.forEach.call(document.querySelectorAll('.energy button'),function(b){ b.setAttribute('aria-pressed',String(b===el)); }); },
+  'finish-go':function(){
+    var f=S.fin, w=clone(S.active), dur=parseNum(f.dur);
+    if(dur==null||dur<1){ f.err='Vul de duur in minuten in.'; finishSheet(); return; }
+    w.status='done'; w.finishedAt=Date.now(); w.durationMin=Math.round(dur); w.energy=f.energy||null; w.note=f.note.trim();
+    w.progress=summarize(w,S.workouts); w.updatedAt=Date.now(); w.sync='pending';
+    S.workouts=sortWorkouts([w].concat(S.workouts)); S.active=null;
+    var ok=persist(); persistActive();
+    S.flash=!ok?null:S.settings.url?{ok:true,msg:'Training opgeslagen. Hij wordt naar je logboek gestuurd zodra er verbinding is.'}:{ok:true,msg:'Training opgeslagen op je telefoon. Koppel je logboek om hem ook in je sheet te zetten.'};
+    closeSheet(); S.tab='vandaag'; render(); $('view').scrollTop=0; syncAll();
+  },
+  hist:function(el){ S.histMode=el.dataset.m; render(); },
+  open:function(el){ S.openSess=S.openSess===el.dataset.id?null:el.dataset.id; render(); },
+  delsess:function(el){
+    S.pendingDel=el.dataset.id;
+    confirmSheet('Sessie verwijderen?',S.settings.url?'De sessie verdwijnt uit de app en uit je sheet, inclusief de rij in het tabblad Gym.':'De sessie verdwijnt van je telefoon.','Verwijderen','delsess-go');
+  },
+  'delsess-go':function(){
+    var id=S.pendingDel, w=S.workouts.filter(function(x){return x.id===id;})[0]; closeSheet(); if(!w) return;
+    S.workouts=S.workouts.filter(function(x){return x.id!==id;});
+    if(S.settings.url&&w.sync==='sent') S.settings.deletes.push(id);
+    persist(); render(); syncAll();
+  },
+  redit:function(el){ var r=S.routines.filter(function(x){return x.id===el.dataset.id;})[0]; if(r){ S.edit=clone(r); render(); } },
+  rnew:function(){ S.edit={id:uid(),isNew:true,name:'',type:'Upper',order:S.routines.length+1,exercises:[{exId:'',name:'',warmups:1,sets:1}]}; render(); },
+  rcancel:function(){ S.edit=null; render(); },
+  raddex:function(){ S.edit.exercises.push({exId:'',name:'',warmups:1,sets:1}); render(); },
+  rdelex:function(el){ S.edit.exercises.splice(+el.dataset.i,1); render(); },
+  rup:function(el){ var i=+el.dataset.i,e=S.edit.exercises; e.splice(i-1,0,e.splice(i,1)[0]); render(); },
+  rdown:function(el){ var i=+el.dataset.i,e=S.edit.exercises; e.splice(i+1,0,e.splice(i,1)[0]); render(); },
+  rsave:function(){
+    var r=clone(S.edit); r.name=String(r.name).trim();
+    r.exercises=r.exercises.filter(function(e){return String(e.name).trim();}).map(function(e){ var n=String(e.name).trim(); return {exId:slug(n),name:n,warmups:Math.min(9,Math.round(parseNum(e.warmups)||0)),sets:Math.min(9,Math.round(parseNum(e.sets)||0))}; });
+    if(!r.name){ S.flash={msg:'Geef de routine een naam.'}; render(); return; }
+    delete r.isNew;
+    r.exercises.forEach(function(e){ if(!S.exercises[e.exId]) S.exercises[e.exId]={name:e.name,setup:''}; });
+    S.routines=S.routines.filter(function(x){return x.id!==r.id;}).concat([r]).sort(function(a,b){return (a.order||0)-(b.order||0);});
+    S.edit=null; S.flash=null; render(); configChanged();
+  },
+  rdel:function(){ confirmSheet('Routine verwijderen?','Je afgeronde trainingen met deze routine blijven in de historie staan.','Verwijderen','rdel-go'); },
+  'rdel-go':function(){
+    var id=S.edit.id; closeSheet();
+    S.routines=S.routines.filter(function(x){return x.id!==id;}); S.edit=null; render(); configChanged();
+  }
+};
+function addExercise(id,name){
+  closeSheet();
+  if(!S.active.exercises.some(function(e){return e.exId===id;})) S.active.exercises.push({exId:id,name:name,sets:[blankSet('w'),blankSet('s')]});
+  persistActive(); render();
+}
+
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-a]');
+  if(!el){ if(e.target.id==='sheet') closeSheet(); return; }
+  if(el.disabled) return;
+  var fn=A[el.dataset.a]; if(fn) fn(el,e);
+});
+document.addEventListener('input',function(e){
+  var t=e.target;
+  if(t.dataset.f&&S.active){
+    var row=t.closest('.plate'), s=S.active.exercises[+row.dataset.ex].sets[+row.dataset.set];
+    if(t.dataset.f==='rir') s.rir=t.value; else s[t.dataset.f]=parseNum(t.value);
+    touch();
+  } else if(t.dataset.fin&&S.fin){
+    S.fin[t.dataset.fin]=t.value;
+  } else if(t.dataset.r&&S.edit){
+    var k=t.dataset.r;
+    if(k==='name'||k==='type') S.edit[k]=t.value;
+    else{ var ex=S.edit.exercises[+t.dataset.i]; if(k==='exname') ex.name=t.value; else ex[k]=t.value; }
+  }
+});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.dataset.f&&S.active){ var row=t.closest('.plate'); updatePill(+row.dataset.ex); }
+});
+document.addEventListener('submit',function(e){ e.preventDefault(); });
+window.addEventListener('hashchange',function(){ route(); render(); });
+window.addEventListener('pagehide',function(){ persistActive(); });
+document.addEventListener('visibilitychange',function(){ if(document.hidden) persistActive(); else syncAll(); });
+window.addEventListener('online',function(){ syncAll(); });
+setInterval(tick,1000);
+boot();
+})();
+</script>
+</body>
+</html>
