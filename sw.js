@@ -1,5 +1,5 @@
 /* Gymlog: keeps the app available without a connection. Raise VERSION when the app files change. */
-const VERSION = 'gymlog-v1';
+const VERSION = 'gymlog-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {

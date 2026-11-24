@@ -163,6 +163,10 @@ textarea.inp{min-height:72px;resize:vertical}
 .energy button[aria-pressed="true"] small{color:var(--accent-ink)}
 .pick{display:flex;flex-direction:column;gap:6px}
 .pick .btn{text-align:left;font-weight:500}
+.picklist{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto}
+.picklist .btn{text-align:left;font-weight:500}
+.picklist .btn.primary{font-weight:600}
+.exname{font:600 18px/1.2 var(--f-body);color:var(--ink);padding:8px 0}
 @media (prefers-reduced-motion:no-preference){
   .plate,.tab{transition:background-color .15s,border-color .15s}
 }
@@ -585,13 +589,13 @@ function editRoutine(){
   o+='<label class="lbl" for="rname">Naam<input class="inp" id="rname" data-r="name" value="'+esc(r.name)+'"></label>';
   o+='<label class="lbl" for="rtype">Type in je logboek<select class="inp" id="rtype" data-r="type">'+TYPES.map(function(t){return '<option'+(t===r.type?' selected':'')+'>'+t+'</option>';}).join('')+'</select></label>';
   r.exercises.forEach(function(e,i){
-    o+='<div class="exedit"><label class="lbl" for="en'+i+'">Oefening '+(i+1)+'<input class="inp" id="en'+i+'" data-r="exname" data-i="'+i+'" value="'+esc(e.name)+'"></label>'
+    o+='<div class="exedit"><div class="lbl">Oefening '+(i+1)+'<span class="exname">'+esc(e.name)+'</span></div>'
       +'<label class="lbl" for="ew'+i+'">Warm<input class="inp" id="ew'+i+'" data-r="warmups" data-i="'+i+'" inputmode="numeric" value="'+esc(e.warmups==null?0:e.warmups)+'"></label>'
       +'<label class="lbl" for="es'+i+'">Sets<input class="inp" id="es'+i+'" data-r="sets" data-i="'+i+'" inputmode="numeric" value="'+esc(e.sets==null?0:e.sets)+'"></label>'
       +'<div class="tools"><button class="btn" data-a="rup" data-i="'+i+'"'+(i?'':' disabled')+' aria-label="Omhoog">↑</button><button class="btn" data-a="rdown" data-i="'+i+'"'+(i<r.exercises.length-1?'':' disabled')+' aria-label="Omlaag">↓</button><button class="btn ghost danger" data-a="rdelex" data-i="'+i+'">Weghalen</button></div></div>';
   });
   o+='<button class="btn" data-a="raddex">+ Oefening</button>';
-  o+='<p class="small muted">Een oefening met dezelfde naam deelt zijn historie tussen routines. Hernoem je hem, dan begint de historie opnieuw.</p>';
+  o+='<p class="small muted">Kies je een bestaande oefening, dan neemt de routine zijn historie en machine-instelling mee.</p>';
   o+='<div class="row"><button class="btn primary" data-a="rsave">Opslaan</button><button class="btn" data-a="rcancel">Annuleren</button>';
   if(!r.isNew) o+='<button class="btn ghost danger" data-a="rdel">Routine verwijderen</button>';
   return o+'</div></section>';
@@ -712,19 +716,14 @@ var A={
     var i=+el.dataset.ex, ex=S.active.exercises[i], v=$('setupv').value.trim();
     S.exercises[ex.exId]={name:ex.name,setup:v}; closeSheet(); rerenderCard(i); configChanged();
   },
-  addex:function(){
-    var have={}; S.active.exercises.forEach(function(e){ have[e.exId]=1; });
-    var ids=Object.keys(S.exercises).filter(function(id){return !have[id];}).sort(function(a,b){ return S.exercises[a].name.localeCompare(S.exercises[b].name); });
-    var o='<h2>Oefening toevoegen</h2><div class="row"><input class="inp" id="newex" placeholder="Nieuwe oefening" style="flex:1" aria-label="Naam van nieuwe oefening"><button class="btn primary" data-a="addex-new">Toevoegen</button></div><div class="pick">';
-    ids.forEach(function(id){ o+='<button class="btn" data-a="addex-pick" data-id="'+esc(id)+'">'+esc(S.exercises[id].name)+'</button>'; });
-    openSheet(o+'</div><button class="btn" data-a="close">Annuleren</button>');
-  },
-  'addex-pick':function(el){ addExercise(el.dataset.id,S.exercises[el.dataset.id].name); },
-  'addex-new':function(){
-    var n=$('newex').value.trim(); if(!n) return;
+  addex:function(){ openPicker('workout'); },
+  pick:function(el){ var id=el.dataset.id; addPicked(S.pickMode,id,S.exercises[id].name); },
+  'pick-new':function(){
+    var n=($('pickq').value||'').trim(); if(!n) return;
     var id=slug(n), isNew=!S.exercises[id];
     if(isNew) S.exercises[id]={name:n,setup:''};
-    addExercise(id,S.exercises[id].name); if(isNew) configChanged();
+    addPicked(S.pickMode,id,S.exercises[id].name);
+    if(isNew&&S.pickMode==='workout') configChanged();
   },
   close:function(){ closeSheet(); },
   discard:function(){ confirmSheet('Training weggooien?','Alles wat je in deze training hebt ingevuld, verdwijnt.','Weggooien','discard-go'); },
@@ -758,15 +757,15 @@ var A={
     persist(); render(); syncAll();
   },
   redit:function(el){ var r=S.routines.filter(function(x){return x.id===el.dataset.id;})[0]; if(r){ S.edit=clone(r); render(); } },
-  rnew:function(){ S.edit={id:uid(),isNew:true,name:'',type:'Upper',order:S.routines.length+1,exercises:[{exId:'',name:'',warmups:1,sets:1}]}; render(); },
+  rnew:function(){ S.edit={id:uid(),isNew:true,name:'',type:'Upper',order:S.routines.length+1,exercises:[]}; render(); },
   rcancel:function(){ S.edit=null; render(); },
-  raddex:function(){ S.edit.exercises.push({exId:'',name:'',warmups:1,sets:1}); render(); },
+  raddex:function(){ openPicker('routine'); },
   rdelex:function(el){ S.edit.exercises.splice(+el.dataset.i,1); render(); },
   rup:function(el){ var i=+el.dataset.i,e=S.edit.exercises; e.splice(i-1,0,e.splice(i,1)[0]); render(); },
   rdown:function(el){ var i=+el.dataset.i,e=S.edit.exercises; e.splice(i+1,0,e.splice(i,1)[0]); render(); },
   rsave:function(){
     var r=clone(S.edit); r.name=String(r.name).trim();
-    r.exercises=r.exercises.filter(function(e){return String(e.name).trim();}).map(function(e){ var n=String(e.name).trim(); return {exId:slug(n),name:n,warmups:Math.min(9,Math.round(parseNum(e.warmups)||0)),sets:Math.min(9,Math.round(parseNum(e.sets)||0))}; });
+    r.exercises=r.exercises.filter(function(e){return String(e.name).trim();}).map(function(e){ var n=String(e.name).trim(); return {exId:e.exId||slug(n),name:n,warmups:Math.min(9,Math.round(parseNum(e.warmups)||0)),sets:Math.min(9,Math.round(parseNum(e.sets)||0))}; });
     if(!r.name){ S.flash={msg:'Geef de routine een naam.'}; render(); return; }
     delete r.isNew;
     r.exercises.forEach(function(e){ if(!S.exercises[e.exId]) S.exercises[e.exId]={name:e.name,setup:''}; });
@@ -779,6 +778,36 @@ var A={
     S.routines=S.routines.filter(function(x){return x.id!==id;}); S.edit=null; render(); configChanged();
   }
 };
+function norm(t){ return String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function pickExcluded(mode){
+  var list=mode==='workout'?S.active.exercises:S.edit.exercises, ex={};
+  list.forEach(function(e){ if(e.exId) ex[e.exId]=1; });
+  return ex;
+}
+function pickListHtml(q){
+  var ex=pickExcluded(S.pickMode), nq=norm(q.trim()), sq=slug(q.trim()), o='';
+  var ids=Object.keys(S.exercises).filter(function(id){ return !ex[id]&&(!nq||norm(S.exercises[id].name).indexOf(nq)>=0); })
+    .sort(function(a,b){ return S.exercises[a].name.localeCompare(S.exercises[b].name); });
+  ids.forEach(function(id){ o+='<button class="btn" data-a="pick" data-id="'+esc(id)+'">'+esc(S.exercises[id].name)+'</button>'; });
+  if(nq){
+    if(S.exercises[sq]&&ex[sq]) o+='<p class="small muted">'+esc(S.exercises[sq].name)+' staat al in deze '+(S.pickMode==='workout'?'training':'routine')+'.</p>';
+    else if(!S.exercises[sq]) o+='<button class="btn primary" data-a="pick-new">+ Nieuwe oefening: '+esc(q.trim())+'</button>';
+  }
+  if(!o) o='<p class="small muted">Geen oefeningen gevonden.</p>';
+  return o;
+}
+function openPicker(mode){
+  S.pickMode=mode;
+  openSheet('<h2>Oefening toevoegen</h2><label class="lbl" for="pickq">Zoeken of nieuwe naam typen<input class="inp" id="pickq" data-pick autocomplete="off" placeholder="Bijvoorbeeld: curl"></label><div class="picklist" id="picklist">'+pickListHtml('')+'</div><button class="btn" data-a="close">Annuleren</button>');
+}
+function addPicked(mode,id,name){
+  closeSheet();
+  if(mode==='routine'){
+    if(!S.edit.exercises.some(function(e){return e.exId===id;})) S.edit.exercises.push({exId:id,name:name,warmups:1,sets:1});
+    render(); return;
+  }
+  addExercise(id,name);
+}
 function addExercise(id,name){
   closeSheet();
   if(!S.active.exercises.some(function(e){return e.exId===id;})) S.active.exercises.push({exId:id,name:name,sets:[blankSet('w'),blankSet('s')]});
@@ -799,6 +828,8 @@ document.addEventListener('input',function(e){
     touch();
   } else if(t.dataset.fin&&S.fin){
     S.fin[t.dataset.fin]=t.value;
+  } else if(t.dataset.pick!==undefined&&$('picklist')){
+    $('picklist').innerHTML=pickListHtml(t.value);
   } else if(t.dataset.r&&S.edit){
     var k=t.dataset.r;
     if(k==='name'||k==='type') S.edit[k]=t.value;
